@@ -21,42 +21,37 @@ class GAE(nn.Module):
         self.hidden = hidden
         self.dropout = dropout
 
+        self.u_emb = nn.Embedding(num_users, input_dim)
+        self.v_emb = nn.Embedding(num_items, input_dim)
+
         layers = []
-        self.gc1 = GraphConvolution(self.input_dim, self.hidden[0], bias=True)
+        self.gc1 = GraphConvolution(self.num_users, self.num_items, self.num_classes,
+                                    self.input_dim, self.hidden[0], self.hidden[0], bias=True)
         #layers.append(nn.ReLU())
         #layers.append(nn.Dropout(p=self.dropout))
-        self.gc2 = GraphConvolution(self.hidden[0], self.hidden[0], bias=True)
-
-        self.dense = Dense(input_dim=self.hidden[0],
-                            output_dim=self.hidden[1],
-                            num_users=self.num_users,
-                            num_items=self.num_items,
-                            act=lambda x: x,
-                            dropout=self.dropout,
-                            share_user_item_weights=True)
+        self.gc2 = GraphConvolution(self.num_users, self.num_items, self.num_classes,
+                                    self.hidden[0], self.hidden[1], self.hidden[1], bias=True)
 
         self.bilin_dec = BilinearMixture(num_classes=self.num_classes,
                                       input_dim=self.hidden[1],
-                                      num_users=self.num_users,
-                                      num_items=self.num_items,
                                       user_item_bias=False,
                                       dropout=0.,
                                       act=lambda x: x)
 
         #self.model = nn.Sequential(*layers)
 
-    def forward(self, inputs, support):
-        print(inputs.size(), support.size())
-        inputs = inputs.type(torch.cuda.FloatTensor)
-        support = support.type(torch.cuda.FloatTensor)
+    def forward(self, u, v, r, n, c):
+        user = self.u_emb(u)
+        item = self.v_emb(v)
 
-        inter = F.relu(self.gc1(inputs, support))
-        inter = F.dropout(inter, self.dropout)
-        inter = self.gc2(inter, support)
-        inter = self.dense(inter)
-        outputs = self.bilin_dec(inter)
+        u_next, v_next = self.gc1(user, item, r, c)
+        u_next = F.dropout(u_next, self.dropout)
+        v_next = F.dropout(v_next, self.dropout)
 
-        loss = softmax_cross_entropy(outputs, labels)
-        accuracy = softmax_accuracy(outputs, labels)
+        u_next, v_next = self.gc2(user, item, r, c)
+        outputs = self.bilin_dec(u_next, v_next)
+
+        loss = softmax_cross_entropy(outputs, r)
+        accuracy = softmax_accuracy(outputs, r)
 
         return outputs, loss, accuracy

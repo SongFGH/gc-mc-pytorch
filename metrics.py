@@ -1,4 +1,6 @@
-import tensorflow as tf
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 def softmax_accuracy(preds, labels):
@@ -8,9 +10,9 @@ def softmax_accuracy(preds, labels):
     :param labels: ground truth labelt
     :return: average accuracy
     """
-    correct_prediction = tf.equal(tf.argmax(preds, 1), tf.to_int64(labels))
-    accuracy_all = tf.cast(correct_prediction, tf.float32)
-    return tf.reduce_mean(accuracy_all)
+    _, max_r = torch.max(preds, 1)
+    correct_prediction = (max_r == labels).float()
+    return torch.mean(correct_prediction)
 
 
 def expected_rmse(logits, labels, class_values=None):
@@ -66,8 +68,8 @@ def rmse(logits, labels, class_values=None):
     return tf.sqrt(tf.reduce_mean(mse))
 
 
-def softmax_cross_entropy(outputs, labels):
+def softmax_cross_entropy(input, target):
     """ computes average softmax cross entropy """
 
-    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=outputs, labels=labels)
-    return tf.reduce_mean(loss)
+    loss = F.cross_entropy(input=input, target=target)
+    return torch.mean(loss)
