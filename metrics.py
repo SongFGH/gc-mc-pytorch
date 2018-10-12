@@ -71,5 +71,5 @@ def rmse(logits, labels, class_values=None):
 def softmax_cross_entropy(input, target):
     """ computes average softmax cross entropy """
 
-    loss = F.cross_entropy(input=input, target=target)
+    loss = F.nll_loss(input=input, target=target)
     return torch.mean(loss)

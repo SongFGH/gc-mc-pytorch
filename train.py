@@ -33,7 +33,7 @@ hidden = args.hidden
 
 # Creating the architecture of the Neural Network
 if args.model == 'GAE':
-    model = GAE(num_users, num_movies, num_classes, emb_dim, hidden, args.dropout)
+    model = GAE(num_users, num_movies, num_classes, emb_dim, hidden, args.dropout, args.rm_path)
 if torch.cuda.is_available():
     model.cuda()
 """Print out the network information."""

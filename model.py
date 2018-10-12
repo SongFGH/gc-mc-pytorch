@@ -10,7 +10,7 @@ from metrics import softmax_accuracy, expected_rmse, softmax_cross_entropy
 
 class GAE(nn.Module):
     def __init__(self, num_users, num_items, num_classes,
-                 input_dim, hidden, dropout, **kwargs):
+                 input_dim, hidden, dropout, rm_path, **kwargs):
         super(GAE, self).__init__()
 
         self.num_users = num_users
@@ -20,6 +20,8 @@ class GAE(nn.Module):
         self.input_dim = input_dim
         self.hidden = hidden
         self.dropout = dropout
+
+        self.rating_mtx = torch.load(rm_path)
 
         self.u_emb = nn.Embedding(num_users, input_dim)
         self.v_emb = nn.Embedding(num_items, input_dim)
