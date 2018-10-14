@@ -65,12 +65,12 @@ def train():
         for s, (x, n, c) in enumerate(train_loader):
             x = x.to(device)
             n = n.to(device)
-            c = c.to(device)
-            u = Variable(x[:,0])
-            v = Variable(x[:,1])
-            r = Variable(x[:,2]-1)
+            #c = c.to(device)
+            u = Variable(x[:,0]-1)
+            v = Variable(x[:,1]-1)
+            #r = Variable(x[:,2]-1)
 
-            output, loss, accuracy = model(u, v, r, n, c)
+            output, loss, accuracy = model(u, v, n)
             train_loss += loss.item()
             train_acc  += accuracy.item()
 
