@@ -55,45 +55,45 @@ class GAE(nn.Module):
         #self.model = nn.Sequential(*layers)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.ratings = self.ratings.to(self.device)
+        self.rating_mtx = self.rating_mtx.to(self.device).long()
 
-    def forward(self, u, v, n):
-        u1 = list(set(torch.nonzero(self.rating_mtx[u])[:,1].data.numpy()))
-        u1+= list(v.data.cpu().numpy())
-        u2 = list(set(torch.nonzero(self.rating_mtx.t()[u1])[:,1].data.numpy()))
+    def batch_gce(self, u, adjs, rtx, gc1, gc2, emb, num1, num2):
+        u1 = list(set(torch.nonzero(rtx[u])[:,1].data.numpy()))
+        u2 = list(set(torch.nonzero(rtx.t()[u1])[:,1].data.numpy()))
 
-        user_batch = torch.zeros(self.num_users, self.input_dim).to(self.device)
-        item_batch = torch.zeros(self.num_items, self.input_dim).to(self.device)
-        user_batch[u2] = self.u_emb(torch.from_numpy(np.array(u2)).to(self.device))
-        item_batch[u1] = self.v_emb(torch.from_numpy(np.array(u1)).to(self.device))
-        for i, adj in enumerate(self.ratings):
-            item_batch[u1] += self.gc1_u[i](user_batch, adj.t())[u1]
+        user_batch = torch.zeros(num1, self.input_dim).to(self.device)
+        user_batch[u2] = emb(torch.from_numpy(np.array(u2)).to(self.device))
+        item_batch = torch.zeros(num2, self.hidden[0]).to(self.device)
+        for r, adj in enumerate(adjs):
+            item_batch[u1] += gc1[r](user_batch, adj.t())[u1]
 
-        v1 = list(set(torch.nonzero(self.rating_mtx.t()[v])[:,1].data.numpy()))
-        v1+= list(u.data.cpu().numpy())
-        v2 = list(set(torch.nonzero(self.rating_mtx[v1])[:,1].data.numpy()))
+        item_batch = F.dropout(item_batch, self.dropout)
 
-        item_batch = torch.zeros(self.num_items, self.input_dim).to(self.device)
-        user_batch = torch.zeros(self.num_users, self.input_dim).to(self.device)
-        item_batch[v2] = self.v_emb(torch.from_numpy(np.array(v2)).to(self.device))
-        user_batch[v1] = self.u_emb(torch.from_numpy(np.array(v1)).to(self.device))
-        for i, adj in enumerate(self.ratings):
-            user_batch[v1] += self.gc1_v[i](item_batch, adj)[v1]
+        user_embed = torch.zeros(num1, self.hidden[1]).to(self.device)
+        for r, adj in enumerate(adjs):
+            user_embed[u] += gc2[r](item_batch, adj)[u]
 
-        user_batch = self.u_emb(u).to(self.device)
-        user_batch = self.u_emb(v).to(self.device)
+        return user_embed
 
-        for i, adj in enumerate(self.ratings):
-            user_batch += self.gc2_u[i](item_batch, adj)[u]
-        for i, adj in enumerate(self.ratings):
-            user_batch += self.gc2_u[i](item_batch, adj)[u]
+    def bilinear_decoder(self, u_next, v_next):
 
-        u_next = F.dropout(u_next, self.dropout)
-        v_next = F.dropout(v_next, self.dropout)
-
-        u_next, v_next = self.gc2(user, item, r, c)
         outputs = self.bilin_dec(u_next, v_next)
 
-        loss = softmax_cross_entropy(outputs, r)
-        accuracy = softmax_accuracy(outputs, r)
+        loss = softmax_cross_entropy(outputs, self.rating_mtx.view(-1))
+        accuracy = softmax_accuracy(outputs, self.rating_mtx.view(-1))
 
         return outputs, loss, accuracy
+
+    def forward(self, idx, item):
+        if item:
+            gc1 = self.gc1_v; gc2 = self.gc2_v; emb = self.v_emb
+            num1 = self.num_items; num2 = self.num_users
+            adjs = self.ratings.permute(0,2,1)
+            rtx = self.rating_mtx.t()
+        else:
+            gc1 = self.gc1_u; gc2 = self.gc2_u; emb = self.u_emb
+            num1 = self.num_users; num2 = self.num_items
+            adjs = self.ratings
+            rtx = self.rating_mtx
+
+        return self.batch_gce(idx, adjs, rtx, gc1, gc2, emb, num1, num2)

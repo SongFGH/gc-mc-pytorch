@@ -24,7 +24,7 @@ class GraphConvolution(Module):
     def forward(self, input, adj):
         support = self.linear(input)
         output = torch.spmm(adj, support)
-        return output
+        return torch.sigmoid(output)
 
 class BilinearMixture(Module):
     """
@@ -36,7 +36,9 @@ class BilinearMixture(Module):
                  dropout=0., act=F.softmax, **kwargs):
         super(BilinearMixture, self).__init__(**kwargs)
 
-        self.bilinear = nn.Bilinear(input_dim, input_dim, num_classes, bias=user_item_bias)
+        self.num_classes = num_classes
+        self.weight = Parameter(torch.Tensor(num_classes, input_dim, input_dim))
+
         self.dropout = dropout
         self.act = act
 
@@ -44,6 +46,7 @@ class BilinearMixture(Module):
         u_inputs = F.dropout(u_inputs, 1 - self.dropout)
         v_inputs = F.dropout(v_inputs, 1 - self.dropout)
 
-        outputs = self.bilinear(u_inputs, v_inputs)
+        outputs = torch.matmul(self.weight, u_inputs.t()).permute(0,2,1)
+        outputs = torch.matmul(outputs,v_inputs.t()).permute(1,2,0)
 
-        return self.act(outputs)
+        return self.act(outputs).view(-1, self.num_classes)

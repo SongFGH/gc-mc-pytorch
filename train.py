@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
 from torch.autograd import Variable
+from torch.utils.data import BatchSampler, SequentialSampler
 
 from model import *
 from config import get_args
@@ -59,26 +60,28 @@ def train():
 
     # Training
     for epoch in range(args.start_epoch, args.num_epochs):
-        train_loss = 0
-        train_acc  = 0
         model.train()
-        for s, (x, n, c) in enumerate(train_loader):
-            x = x.to(device)
-            n = n.to(device)
-            #c = c.to(device)
-            u = Variable(x[:,0]-1)
-            v = Variable(x[:,1]-1)
-            #r = Variable(x[:,2]-1)
 
-            output, loss, accuracy = model(u, v, n)
-            train_loss += loss.item()
-            train_acc  += accuracy.item()
+        next_user = torch.zeros(num_users, hidden[1]).to(device)
+        next_item = torch.zeros(num_movies, hidden[1]).to(device)
+        for s, x in enumerate(BatchSampler(SequentialSampler(range(num_users)),
+                              batch_size=args.batch_size, drop_last=False)):
+            x = torch.from_numpy(np.array(x)).to(device)
 
-            model.zero_grad()
-            loss.backward()
-            optimizer.step()
-        print('epoch: '+str(epoch+1)+' loss: '+str(train_loss/s)
-                                    +' acc.: '+str(train_acc/s))
+            next_user += model(x, item=False)
+        for s, x in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
+                              batch_size=args.batch_size, drop_last=False)):
+            x = torch.from_numpy(np.array(x)).to(device)
+
+            next_item += model(x, item=True)
+
+        output, loss, accuracy = model.bilinear_decoder(next_user, next_item)
+
+        model.zero_grad()
+        loss.backward()
+        optimizer.step()
+        print('epoch: '+str(epoch+1)+' loss: '+str(loss.item()/s)
+                                    +' acc.: '+str(accuracy.item()/s))
 
         if (epoch+1) % args.val_step == 0:
             # Validation

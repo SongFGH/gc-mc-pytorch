@@ -3,6 +3,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def normalize(mx):
+    """Row-normalize sparse matrix"""
+    rowsum = mx.sum(1)
+    r_inv_sqrt = torch.pow(rowsum, -0.5).view(-1)
+    #r_inv_sqrt[torch.isinf(r_inv_sqrt)] = 0.
+    r_mat_inv_sqrt = torch.diag(r_inv_sqrt)
+    mx = torch.mm(torch.mm(r_mat_inv_sqrt, mx), r_mat_inv_sqrt)
+
+    # T
+    #mx = torch.mm(mx, mx)
+    return mx
+
 def softmax_accuracy(preds, labels):
     """
     Accuracy for multiclass model.
