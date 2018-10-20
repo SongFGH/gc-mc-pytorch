@@ -80,30 +80,30 @@ def train():
         model.zero_grad()
         loss.backward()
         optimizer.step()
-        print('epoch: '+str(epoch+1)+' loss: '+str(loss.item()/s)
-                                    +' acc.: '+str(accuracy.item()/s))
+        print('epoch: '+str(epoch+1)+' loss: '+str(loss.item()/(num_users+num_movies))
+                                    +' acc.: '+str(accuracy.item()/(num_users+num_movies)))
 
         if (epoch+1) % args.val_step == 0:
             # Validation
             model.eval()
-            val_loss = 0
-            val_acc  = 0
             with torch.no_grad():
-                for s, (x, n, c) in enumerate(val_loader):
-                    x = x.to(device)
-                    n = n.to(device)
-                    c = c.to(device)
-                    u = Variable(x[:,0])
-                    v = Variable(x[:,1])
-                    r = Variable(x[:,2]-1)
+                for s, x in enumerate(BatchSampler(SequentialSampler(range(num_users)),
+                                      batch_size=args.batch_size, drop_last=False)):
+                    x = torch.from_numpy(np.array(x)).to(device)
 
-                    output, loss, accuracy = model(u, v, r, n, c)
-                    val_loss += loss.item()
-                    val_acc  += loss.item()
+                    next_user += model(x, item=False)
+                for s, x in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
+                                      batch_size=args.batch_size, drop_last=False)):
+                    x = torch.from_numpy(np.array(x)).to(device)
 
-            print('[val loss] : '+str(val_loss/s)+' [val accuracy] : '+str(val_acc/s))
-            if best_loss > (val_loss/s):
-                best_loss = (val_loss/s)
+                    next_item += model(x, item=True)
+
+                output, loss, accuracy = model.bilinear_decoder(next_user, next_item)
+
+            print('[val loss] : '+str(loss/(num_users+num_movies))
+                +' [val accuracy] : '+str(accuracy/(num_users+num_movies)))
+            if best_loss > (loss/(num_users+num_movies)):
+                best_loss = (loss/(num_users+num_movies))
                 best_epoch= epoch+1
                 torch.save(model,
                        os.path.join(args.model_path+args.model,
@@ -114,22 +114,22 @@ def test():
     model.load_state_dict(torch.load(os.path.join(args.model_path+args.model,
                           'model-%d.pkl'%(best_epoch))).state_dict())
     model.eval()
-    test_loss = 0
-    test_acc  = 0
     with torch.no_grad():
-        for s, (x, n, c) in enumerate(test_loader):
-            x = x.to(device)
-            n = n.to(device)
-            c = c.to(device)
-            u = Variable(x[:,0])
-            v = Variable(x[:,1])
-            r = Variable(x[:,2]-1)
+        for s, x in enumerate(BatchSampler(SequentialSampler(range(num_users)),
+                              batch_size=args.batch_size, drop_last=False)):
+            x = torch.from_numpy(np.array(x)).to(device)
 
-            output, loss, accuracy = model(u, v, r, n, c)
-            test_loss += loss.item()
-            test_acc  += accuracy.item()
+            next_user += model(x, item=False)
+        for s, x in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
+                              batch_size=args.batch_size, drop_last=False)):
+            x = torch.from_numpy(np.array(x)).to(device)
 
-    print('[test loss] : '+str(test_loss/s)+' [test hit ratio] : '+str(test_acc/s))
+            next_item += model(x, item=True)
+
+        output, loss, accuracy = model.bilinear_decoder(next_user, next_item)
+
+    print('[test loss] : '+str(loss/(num_users+num_movies))
+        +' [test hit ratio] : '+str(accuracy/(num_users+num_movies)))
 
 
 if __name__ == '__main__':

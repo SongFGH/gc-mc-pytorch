@@ -25,5 +25,6 @@ python train.py
 Work In Progress.
 
 ## TODO
+* Train/Valid/Test Separation
 * Negative Sampling
 * Hyper-parameters Settings
