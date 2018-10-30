@@ -2,6 +2,7 @@
 import os
 import numpy as np
 import pandas as pd
+from random import sample
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -64,22 +65,19 @@ def train():
 
         next_user = torch.zeros(num_users, hidden[1]).to(device)
         next_item = torch.zeros(num_movies, hidden[1]).to(device)
-        for s, x in enumerate(BatchSampler(SequentialSampler(range(num_users)),
+        for s, u in enumerate(BatchSampler(SequentialSampler(sample(range(num_users), num_users)),
                               batch_size=args.batch_size, drop_last=False)):
-            x = torch.from_numpy(np.array(x)).to(device)
+            u = torch.from_numpy(np.array(u)).to(device)
 
-            next_user += model(x, item=False)
-        for s, x in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
-                              batch_size=args.batch_size, drop_last=False)):
-            x = torch.from_numpy(np.array(x)).to(device)
+            for s, v in enumerate(BatchSampler(SequentialSampler(sample(range(num_movies), num_movies)),
+                                  batch_size=args.batch_size, drop_last=False)):
+                v = torch.from_numpy(np.array(v)).to(device)
 
-            next_item += model(x, item=True)
+                m_hat, loss, accuracy = model(u,v)
 
-        output, loss, accuracy = model.bilinear_decoder(next_user, next_item)
-
-        model.zero_grad()
-        loss.backward()
-        optimizer.step()
+                model.zero_grad()
+                loss.backward()
+                optimizer.step()
         print('epoch: '+str(epoch+1)+' loss: '+str(loss.item()/(num_users+num_movies))
                                     +' acc.: '+str(accuracy.item()/(num_users+num_movies)))
 

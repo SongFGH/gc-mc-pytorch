@@ -15,15 +15,18 @@ def normalize(mx):
     #mx = torch.mm(mx, mx)
     return mx
 
-def softmax_accuracy(preds, labels):
+def softmax_accuracy(preds, target):
     """
     Accuracy for multiclass model.
     :param preds: predictions
     :param labels: ground truth labelt
     :return: average accuracy
     """
-    _, max_r = torch.max(preds, 1)
-    correct_prediction = (max_r == labels).float()
+    omg = torch.nonzero(torch.sum(target,0))
+    preds = torch.stack([torch.max(preds[:, x, y], 0)[1] for (x,y) in omg], 0)
+    target = torch.stack([torch.max(target[:,x,y], 0)[1] for (x,y) in omg], 0)
+
+    correct_prediction = (preds == target).float()
     return torch.mean(correct_prediction)
 
 
@@ -31,8 +34,7 @@ def expected_rmse(logits, labels, class_values=None):
     """
     Computes the root mean square error with the predictions
     computed as average predictions. Note that without the average
-    this cannot be used as a loss function as it would not be differentiable.
-    :param logits: predicted logits
+    this cannot be used as a loss function as it would not be differentiable. :param logits: predicted logits
     :param labels: ground truth label
     :param class_values: rating values corresponding to each class.
     :return: rmse
@@ -83,5 +85,10 @@ def rmse(logits, labels, class_values=None):
 def softmax_cross_entropy(input, target):
     """ computes average softmax cross entropy """
 
-    loss = F.nll_loss(input=input, target=target)
-    return torch.mean(loss)
+    omg = torch.nonzero(torch.sum(target,0))
+    input = torch.stack([input[:, x, y] for (x,y) in omg], 0)
+    target = torch.stack([torch.max(target[:,x,y], 0)[1] for (x,y) in omg], 0)
+
+    loss = F.cross_entropy(input=input, target=target)
+
+    return loss
