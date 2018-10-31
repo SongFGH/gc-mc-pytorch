@@ -16,9 +16,9 @@ def get_args():
     parser.add_argument('--start-epoch', type=int, default=0)
     parser.add_argument('--neg-cnt', type=int, default=100)
     parser.add_argument('--at-k', type=int, default=10)
-    parser.add_argument('--lr', type=float, default=0.0001)
-    parser.add_argument('--weight_decay', type=float, default=0.5)
-    parser.add_argument('--dropout', type=float, default=0.5)
+    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--weight_decay', type=float, default=0.005)
+    parser.add_argument('--dropout', type=float, default=0.7)
 
     parser.add_argument('--model', type=str, default='GAE',
                                    help='GAE')
@@ -30,13 +30,9 @@ def get_args():
     parser.add_argument('--item-cnt', type=int, default=3953)
     parser.add_argument('--class-cnt', type=int, default=5)
 
-    parser.add_argument('--train-path', type=str, default='./data/train_score.pkl')
-    parser.add_argument('--val-path', type=str, default='./data/val_score.pkl')
-    parser.add_argument('--test-path', type=str, default='./data/test_score.pkl')
-    parser.add_argument('--neg-path', type=str, default='./data/neg_score.npy')
-    parser.add_argument('--du-path', type=str, default='./data/degree_user.pkl')
-    parser.add_argument('--di-path', type=str, default='./data/degree_item.pkl')
-    parser.add_argument('--rm-path', type=str, default='./data/rating_mtx.pkl')
+    parser.add_argument('--train-path', type=str, default='./data/rating_train.pkl')
+    parser.add_argument('--val-path', type=str, default='./data/rating_val.pkl')
+    parser.add_argument('--test-path', type=str, default='./data/rating_test.pkl')
 
     args = parser.parse_args()
 

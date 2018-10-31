@@ -10,7 +10,7 @@ from metrics import normalize, softmax_accuracy, softmax_cross_entropy
 
 class GAE(nn.Module):
     def __init__(self, num_users, num_items, num_classes,
-                 input_dim, hidden, dropout, rm_path, **kwargs):
+                 input_dim, hidden, dropout, **kwargs):
         super(GAE, self).__init__()
 
         self.num_users = num_users
@@ -20,9 +20,6 @@ class GAE(nn.Module):
         self.input_dim = input_dim
         self.hidden = hidden
         self.dropout = dropout
-
-        self.ratings = torch.load(rm_path)
-        self.ratings_sum = sum([i*rate for i, rate in enumerate(self.ratings)])
 
         self.u_emb = nn.Embedding(num_users, input_dim)
         self.v_emb = nn.Embedding(num_items, input_dim)
@@ -42,8 +39,6 @@ class GAE(nn.Module):
         #self.model = nn.Sequential(*layers)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.gcl = self.gcl.to(self.device)
-        self.ratings = self.ratings.to(self.device)
-        self.ratings_sum = self.ratings_sum.to(self.device).long()
 
     def gc_encoder(self, u, v, m):
         du = torch.abs(torch.sum(torch.sum(m, 1), 0)).float()
@@ -68,8 +63,8 @@ class GAE(nn.Module):
 
         return m_hat, loss, accuracy
 
-    def forward(self, u, v):
-        m = torch.index_select(torch.index_select(self.ratings, 1, u), 2, v)
+    def forward(self, u, v, m):
+        m = torch.index_select(torch.index_select(m, 1, u), 2, v)
         u = self.u_emb(u)
         v = self.v_emb(v)
 

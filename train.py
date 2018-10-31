@@ -17,14 +17,6 @@ args = get_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# UserID::MovieID::Rating::Timestamp (5-star scale)
-train_loader = get_loader(args.train_path, args.neg_path, args.du_path, args.di_path,
-                          args.neg_cnt, args.batch_size, args.data_shuffle)
-val_loader = get_loader(args.val_path, args.neg_path,  args.du_path, args.di_path,
-                        args.neg_cnt, args.batch_size, args.data_shuffle)
-test_loader = get_loader(args.test_path, args.neg_path,  args.du_path, args.di_path,
-                         args.neg_cnt, args.batch_size, args.data_shuffle)
-
 # Getting the number of users and movies
 num_users  = args.user_cnt
 num_movies = args.item_cnt
@@ -33,9 +25,13 @@ num_classes  = args.class_cnt
 emb_dim= args.emb_dim
 hidden = args.hidden
 
+rating_train = torch.load(args.train_path).to(device)
+rating_val = torch.load(args.val_path).to(device)
+rating_test = torch.load(args.test_path).to(device)
+
 # Creating the architecture of the Neural Network
 if args.model == 'GAE':
-    model = GAE(num_users, num_movies, num_classes, emb_dim, hidden, args.dropout, args.rm_path)
+    model = GAE(num_users, num_movies, num_classes, emb_dim, hidden, args.dropout)
 if torch.cuda.is_available():
     model.cuda()
 """Print out the network information."""
@@ -45,8 +41,6 @@ for p in model.parameters():
 print(model)
 print("The number of parameters: {}".format(num_params))
 
-#criterion = nn.MSELoss()
-criterion = nn.BCEWithLogitsLoss()#CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr = args.lr, weight_decay = args.weight_decay)
 
 best_epoch = 0
@@ -63,45 +57,44 @@ def train():
     for epoch in range(args.start_epoch, args.num_epochs):
         model.train()
 
-        next_user = torch.zeros(num_users, hidden[1]).to(device)
-        next_item = torch.zeros(num_movies, hidden[1]).to(device)
+        train_loss = 0
+        train_acc  = 0
         for s, u in enumerate(BatchSampler(SequentialSampler(sample(range(num_users), num_users)),
                               batch_size=args.batch_size, drop_last=False)):
             u = torch.from_numpy(np.array(u)).to(device)
 
-            for s, v in enumerate(BatchSampler(SequentialSampler(sample(range(num_movies), num_movies)),
+            for t, v in enumerate(BatchSampler(SequentialSampler(sample(range(num_movies), num_movies)),
                                   batch_size=args.batch_size, drop_last=False)):
                 v = torch.from_numpy(np.array(v)).to(device)
 
-                m_hat, loss, accuracy = model(u,v)
+                m_hat, loss, accuracy = model(u,v,rating_train)
+                train_loss += loss.item()
+                train_acc  += accuracy.item()
 
                 model.zero_grad()
                 loss.backward()
                 optimizer.step()
-        print('epoch: '+str(epoch+1)+' loss: '+str(loss.item()/(num_users+num_movies))
-                                    +' acc.: '+str(accuracy.item()/(num_users+num_movies)))
+        print('epoch: '+str(epoch+1)+' loss: '+str(train_loss/(s+t))
+                                    +' acc.: '+str(train_acc/(s+t)))
 
         if (epoch+1) % args.val_step == 0:
             # Validation
             model.eval()
             with torch.no_grad():
-                for s, x in enumerate(BatchSampler(SequentialSampler(range(num_users)),
-                                      batch_size=args.batch_size, drop_last=False)):
-                    x = torch.from_numpy(np.array(x)).to(device)
+                for s, u in enumerate(BatchSampler(SequentialSampler(range(num_users)),
+                                      batch_size=num_users, drop_last=False)):
+                    u = torch.from_numpy(np.array(u)).to(device)
 
-                    next_user += model(x, item=False)
-                for s, x in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
-                                      batch_size=args.batch_size, drop_last=False)):
-                    x = torch.from_numpy(np.array(x)).to(device)
+                    for t, v in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
+                                          batch_size=num_movies, drop_last=False)):
+                        v = torch.from_numpy(np.array(v)).to(device)
 
-                    next_item += model(x, item=True)
+                        m_hat, loss, accuracy = model(u,v,rating_val)
 
-                output, loss, accuracy = model.bilinear_decoder(next_user, next_item)
-
-            print('[val loss] : '+str(loss/(num_users+num_movies))
-                +' [val accuracy] : '+str(accuracy/(num_users+num_movies)))
-            if best_loss > (loss/(num_users+num_movies)):
-                best_loss = (loss/(num_users+num_movies))
+            print('[val loss] : '+str(loss)
+                +' [val accuracy] : '+str(accuracy))
+            if best_loss > loss:
+                best_loss = loss
                 best_epoch= epoch+1
                 torch.save(model,
                        os.path.join(args.model_path+args.model,
@@ -113,18 +106,15 @@ def test():
                           'model-%d.pkl'%(best_epoch))).state_dict())
     model.eval()
     with torch.no_grad():
-        for s, x in enumerate(BatchSampler(SequentialSampler(range(num_users)),
-                              batch_size=args.batch_size, drop_last=False)):
-            x = torch.from_numpy(np.array(x)).to(device)
+        for s, u in enumerate(BatchSampler(SequentialSampler(range(num_users)),
+                              batch_size=num_users, drop_last=False)):
+            u = torch.from_numpy(np.array(u)).to(device)
 
-            next_user += model(x, item=False)
-        for s, x in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
-                              batch_size=args.batch_size, drop_last=False)):
-            x = torch.from_numpy(np.array(x)).to(device)
+            for t, v in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
+                                  batch_size=num_movies, drop_last=False)):
+                v = torch.from_numpy(np.array(v)).to(device)
 
-            next_item += model(x, item=True)
-
-        output, loss, accuracy = model.bilinear_decoder(next_user, next_item)
+                m_hat, loss, accuracy = model(u,v,rating_test)
 
     print('[test loss] : '+str(loss/(num_users+num_movies))
         +' [test hit ratio] : '+str(accuracy/(num_users+num_movies)))
