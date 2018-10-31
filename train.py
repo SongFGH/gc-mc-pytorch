@@ -30,8 +30,7 @@ rating_val = torch.load(args.val_path).to(device)
 rating_test = torch.load(args.test_path).to(device)
 
 # Creating the architecture of the Neural Network
-if args.model == 'GAE':
-    model = GAE(num_users, num_movies, num_classes, emb_dim, hidden, args.dropout)
+model = GAE(num_users, num_movies, num_classes, emb_dim, hidden, args.dropout)
 if torch.cuda.is_available():
     model.cuda()
 """Print out the network information."""
@@ -58,24 +57,26 @@ def train():
         model.train()
 
         train_loss = 0
-        train_acc  = 0
+        train_rmse  = 0
         for s, u in enumerate(BatchSampler(SequentialSampler(sample(range(num_users), num_users)),
-                              batch_size=args.batch_size, drop_last=False)):
+                              batch_size=num_users, drop_last=False)):
+                              #batch_size=args.batch_size, drop_last=False)):
             u = torch.from_numpy(np.array(u)).to(device)
 
             for t, v in enumerate(BatchSampler(SequentialSampler(sample(range(num_movies), num_movies)),
-                                  batch_size=args.batch_size, drop_last=False)):
+                                  batch_size=num_movies, drop_last=False)):
+                                  #batch_size=args.batch_size, drop_last=False)):
                 v = torch.from_numpy(np.array(v)).to(device)
 
-                m_hat, loss, accuracy = model(u,v,rating_train)
+                m_hat, loss, rmse = model(u,v,rating_train)
                 train_loss += loss.item()
-                train_acc  += accuracy.item()
+                train_rmse  += rmse.item()
 
                 model.zero_grad()
                 loss.backward()
                 optimizer.step()
-        print('epoch: '+str(epoch+1)+' loss: '+str(train_loss/(s+t))
-                                    +' acc.: '+str(train_acc/(s+t)))
+        print('epoch: '+str(epoch+1)+' loss: '+str(train_loss/((s+1)*(t+1)))
+                                    +' rmse: '+str(train_rmse/((s+1)*(t+1))))
 
         if (epoch+1) % args.val_step == 0:
             # Validation
@@ -89,16 +90,15 @@ def train():
                                           batch_size=num_movies, drop_last=False)):
                         v = torch.from_numpy(np.array(v)).to(device)
 
-                        m_hat, loss, accuracy = model(u,v,rating_val)
+                        m_hat, loss, rmse = model(u,v,rating_val)
 
-            print('[val loss] : '+str(loss)
-                +' [val accuracy] : '+str(accuracy))
-            if best_loss > loss:
-                best_loss = loss
+            print('[val loss] : '+str(loss.item())
+                +' [val rmse] : '+str(rmse.item()))
+            if best_loss > rmse.item():
+                best_loss = rmse.item()
                 best_epoch= epoch+1
-                torch.save(model,
-                       os.path.join(args.model_path+args.model,
-                       'model-%d.pkl'%(epoch+1)))
+                torch.save(model.state_dict(),
+                       os.path.join(args.model_path, 'model-%d.pkl'%(best_epoch)))
 
 def test():
     # Test
@@ -114,10 +114,10 @@ def test():
                                   batch_size=num_movies, drop_last=False)):
                 v = torch.from_numpy(np.array(v)).to(device)
 
-                m_hat, loss, accuracy = model(u,v,rating_test)
+                m_hat, loss, rmse = model(u,v,rating_test)
 
     print('[test loss] : '+str(loss/(num_users+num_movies))
-        +' [test hit ratio] : '+str(accuracy/(num_users+num_movies)))
+        +' [test rmse] : '+str(rmse/(num_users+num_movies)))
 
 
 if __name__ == '__main__':
