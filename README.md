@@ -2,9 +2,9 @@
 
 PyTorch based implementation of Graph Convolutional Matrix Completion for recommender systems, based on [Kipf and Welling](https://arxiv.org/abs/1706.02263) (2017) paper. We also implemented them based on their [source code](https://github.com/riannevdberg/gc-mc).
 
-This code only covers the Movielens 1M Dataset https://grouplens.org/datasets/movielens/.
+This code only covers the Movielens 1M Dataset.
 
-Preprocessing by ```Preprocess.ipynb``` is necessary.
+After downloading [ml_1m](https://grouplens.org/datasets/movielens/) to the ```./data``` directory, you need to preprocess it by ```Preprocess.ipynb```.
 
 ## Requirements
 
@@ -15,16 +15,7 @@ Preprocessing by ```Preprocess.ipynb``` is necessary.
 
 ## Usage
 
-To reproduce the experiments mentioned in the paper you can run the following commands:
 
-**Movielens 1M**
 ```bash
 python train.py
 ```
-
-Work In Progress.
-
-## TODO
-* Train/Valid/Test Separation
-* Negative Sampling
-* Hyper-parameters Settings
