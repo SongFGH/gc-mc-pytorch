@@ -9,7 +9,7 @@ from metrics import rmse, softmax_accuracy, softmax_cross_entropy
 
 
 class GAE(nn.Module):
-    def __init__(self, num_users, num_items, num_classes,
+    def __init__(self, num_users, num_items, num_classes, nb,
                  input_dim, hidden, dropout, **kwargs):
         super(GAE, self).__init__()
 
@@ -32,7 +32,7 @@ class GAE(nn.Module):
         self.bilin_dec = BilinearMixture(num_classes=self.num_classes,
                                       input_dim=self.hidden[1],
                                       user_item_bias=False,
-                                      nb=2)
+                                      nb=nb)
 
         #self.model = nn.Sequential(*layers)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -67,6 +67,6 @@ class GAE(nn.Module):
         v = self.v_emb(v)
 
         hidden = self.gc_encoder(u, v, m)
-        m_hat, loss, accuracy, rmse_loss = self.bl_decoder(hidden[:u.size(0)], hidden[u.size(0):], m)
+        m_hat, loss, rmse_loss = self.bl_decoder(hidden[:u.size(0)], hidden[u.size(0):], m)
 
-        return m_hat, loss, accuracy, rmse_loss
+        return m_hat, loss, rmse_loss

@@ -30,16 +30,17 @@ def rmse(logits, labels):
     :return: mse
     """
 
-    omg = torch.sum(labels, 0).view(-1)
+    omg = torch.sum(labels, 0)
     len_omg = len(torch.nonzero(omg))
 
     pred_y = logits
     y = torch.max(labels, 0)[1].float() + 1.
 
     se = torch.sub(y, pred_y).pow_(2)
-    rmse = torch.sqrt(torch.mean(se))
+    mse= torch.sum(torch.mul(omg, se))/len_omg
+    rmse = torch.sqrt(mse)
 
-    return torch.sum(torch.mul(omg, rmse))/len_omg
+    return rmse
 
 
 def softmax_cross_entropy(input, target):

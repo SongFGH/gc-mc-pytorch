@@ -30,7 +30,7 @@ rating_val = torch.load(args.val_path).to(device)
 rating_test = torch.load(args.test_path).to(device)
 
 # Creating the architecture of the Neural Network
-model = GAE(num_users, num_movies, num_classes, emb_dim, hidden, args.dropout)
+model = GAE(num_users, num_movies, num_classes, args.nb, emb_dim, hidden, args.dropout)
 if torch.cuda.is_available():
     model.cuda()
 """Print out the network information."""
@@ -70,7 +70,7 @@ def train():
 
                 m_hat, loss, rmse = model(u,v,rating_train)
                 train_loss += loss.item()
-                train_rmse  += rmse.item()
+                train_rmse += rmse.item()
 
                 model.zero_grad()
                 loss.backward()
@@ -102,8 +102,8 @@ def train():
 
 def test():
     # Test
-    model.load_state_dict(torch.load(os.path.join(args.model_path+args.model,
-                          'model-%d.pkl'%(best_epoch))).state_dict())
+    model.load_state_dict(torch.load(os.path.join(args.model_path,
+                          'model-%d.pkl'%(best_epoch))))
     model.eval()
     with torch.no_grad():
         for s, u in enumerate(BatchSampler(SequentialSampler(range(num_users)),
