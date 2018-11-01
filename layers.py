@@ -11,31 +11,34 @@ class GraphConvolution(Module):
     Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
     """
 
-    def __init__(self, in_features, hidden, num_classes, dropout, bias=True):
+    def __init__(self, u_features, v_features, hidden, num_classes, dropout, bias=True):
         super(GraphConvolution, self).__init__()
-        self.in_features = in_features
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.dropout = nn.Dropout(dropout)
-        self.weight = [Parameter(torch.randn(in_features, hidden)).to(self.device)
-                       for _ in range(num_classes)]
+        self.u_weight = [Parameter(torch.randn(u_features, hidden)).to(self.device)
+                         for _ in range(num_classes)]
+        self.v_weight = [Parameter(torch.randn(v_features, hidden)).to(self.device)
+                         for _ in range(num_classes)]
         if bias:
             self.bias = Parameter(torch.randn(hidden)).to(self.device)
         else:
             self.bias = None
-        for weight in self.weight:
+        for weight in self.u_weight+self.v_weight:
             nn.init.xavier_normal_(weight)
 
 
-    def forward(self, input, adj, degree, r):
+    def forward(self, u, v, adj, degree, r):
         adj = torch.cat((torch.cat((torch.zeros(adj.size(0), adj.size(0)).to(self.device), adj), 1),
                          torch.cat((adj.t(), torch.zeros(adj.size(1), adj.size(1)).to(self.device)), 1)), 0)
         diag = torch.diag(degree)
         adj = torch.spmm(diag, adj)
 
-        input = self.dropout(input)
-        weight = torch.sum(torch.stack([self.weight[i] for i in range(r+1)], 0), 0)
-        support = torch.mm(input, weight)
+        u = self.dropout(u)
+        v = self.dropout(v)
+        u_weight = torch.sum(torch.stack([self.u_weight[i] for i in range(r+1)], 0), 0)
+        v_weight = torch.sum(torch.stack([self.v_weight[i] for i in range(r+1)], 0), 0)
+        support = torch.cat((torch.mm(u, u_weight), torch.mm(v, v_weight)), 0)
         if self.bias is not None:
             support += self.bias
         output = torch.spmm(adj, support)

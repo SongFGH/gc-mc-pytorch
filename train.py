@@ -25,12 +25,16 @@ num_classes  = args.class_cnt
 emb_dim= args.emb_dim
 hidden = args.hidden
 
-rating_train = torch.load(args.train_path).to(device)
-rating_val = torch.load(args.val_path).to(device)
-rating_test = torch.load(args.test_path).to(device)
+u_features = torch.load(args.data_path+args.users_path).to(device)
+v_features = torch.load(args.data_path+args.movie_path).to(device)
+rating_train = torch.load(args.data_path+args.train_path).to(device)
+rating_val = torch.load(args.data_path+args.val_path).to(device)
+rating_test = torch.load(args.data_path+args.test_path).to(device)
 
 # Creating the architecture of the Neural Network
-model = GAE(num_users, num_movies, num_classes, args.nb, emb_dim, hidden, args.dropout)
+model = GAE(num_users, num_movies, num_classes,
+            u_features, v_features,
+            args.nb, emb_dim, hidden, args.dropout)
 if torch.cuda.is_available():
     model.cuda()
 """Print out the network information."""
@@ -59,16 +63,19 @@ def train():
         train_loss = 0
         train_rmse  = 0
         for s, u in enumerate(BatchSampler(SequentialSampler(sample(range(num_users), num_users)),
-                              batch_size=num_users, drop_last=False)):
-                              #batch_size=args.batch_size, drop_last=False)):
+                              batch_size=args.batch_size, drop_last=False)):
+                              #batch_size=num_users, drop_last=False)):
             u = torch.from_numpy(np.array(u)).to(device)
 
             for t, v in enumerate(BatchSampler(SequentialSampler(sample(range(num_movies), num_movies)),
-                                  batch_size=num_movies, drop_last=False)):
-                                  #batch_size=args.batch_size, drop_last=False)):
+                                  batch_size=args.batch_size, drop_last=False)):
+                                  #batch_size=num_movies, drop_last=False)):
                 v = torch.from_numpy(np.array(v)).to(device)
+                m = torch.index_select(torch.index_select(rating_train, 1, u), 2, v)
+                if len(torch.nonzero(m)) == 0:
+                    continue
 
-                m_hat, loss, rmse = model(u,v,rating_train)
+                m_hat, loss, rmse = model(u,v,m,m)
                 train_loss += loss.item()
                 train_rmse += rmse.item()
 
@@ -89,8 +96,10 @@ def train():
                     for t, v in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
                                           batch_size=num_movies, drop_last=False)):
                         v = torch.from_numpy(np.array(v)).to(device)
+                        m = torch.index_select(torch.index_select(rating_train, 1, u), 2, v)
+                        t = torch.index_select(torch.index_select(rating_val, 1, u), 2, v)
 
-                        m_hat, loss, rmse = model(u,v,rating_val)
+                        m_hat, loss, rmse = model(u,v,m,t)
 
             print('[val loss] : '+str(loss.item())
                 +' [val rmse] : '+str(rmse.item()))
@@ -113,11 +122,13 @@ def test():
             for t, v in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
                                   batch_size=num_movies, drop_last=False)):
                 v = torch.from_numpy(np.array(v)).to(device)
+                m = torch.index_select(torch.index_select(rating_train, 1, u), 2, v)
+                t = torch.index_select(torch.index_select(rating_test, 1, u), 2, v)
 
-                m_hat, loss, rmse = model(u,v,rating_test)
+                m_hat, loss, rmse = model(u,v,m,t)
 
-    print('[test loss] : '+str(loss/(num_users+num_movies))
-        +' [test rmse] : '+str(rmse/(num_users+num_movies)))
+    print('[test loss] : '+str(loss.item())
+        +' [test rmse] : '+str(rmse.item()))
 
 
 if __name__ == '__main__':
