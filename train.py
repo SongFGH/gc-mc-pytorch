@@ -25,15 +25,17 @@ num_classes  = args.class_cnt
 emb_dim= args.emb_dim
 hidden = args.hidden
 
-u_features = torch.load(args.data_path+args.users_path).to(device)
-v_features = torch.load(args.data_path+args.movie_path).to(device)
-rating_train = torch.load(args.data_path+args.train_path).to(device)
-rating_val = torch.load(args.data_path+args.val_path).to(device)
-rating_test = torch.load(args.data_path+args.test_path).to(device)
+train_loader, u_features, v_features, adj, classes = get_loader('ml_100k', 'train', args.batch_size, shuffle=True, num_workers=2)
+valid_loader, _, _, _, _ = get_loader('ml_100k', 'valid', args.batch_size, shuffle=False, num_workers=2)
+test_loader,  _, _, _, _ = get_loader('ml_100k', 'test', args.batch_size, shuffle=False, num_workers=2)
+
+u_features = torch.from_numpy(u_features).to(device)
+v_features = torch.from_numpy(v_features).to(device)
+adj = torch.from_numpy(adj).float().to(device)
 
 # Creating the architecture of the Neural Network
 model = GAE(num_users, num_movies, num_classes,
-            u_features, v_features,
+            u_features, v_features, adj,
             args.nb, emb_dim, hidden, args.dropout)
 if torch.cuda.is_available():
     model.cuda()
@@ -49,7 +51,6 @@ optimizer = optim.Adam(model.parameters(), lr = args.lr, betas = [0.9, 0.999], w
 best_epoch = 0
 best_loss  = 9999.
 
-
 def train():
     global best_loss, best_epoch
     if args.start_epoch:
@@ -61,50 +62,42 @@ def train():
         model.train()
 
         train_loss = 0
-        train_rmse  = 0
-        for s, u in enumerate(BatchSampler(SequentialSampler(sample(range(num_users), num_users)),
-                              batch_size=args.batch_size, drop_last=False)):
-                              #batch_size=num_users, drop_last=False)):
-            u = torch.from_numpy(np.array(u)).to(device)
+        train_rmse = 0
+        for i, (u, v, r) in enumerate(train_loader):
+            u = u.to(device)
+            v = v.to(device)
+            r = r.to(device)
 
-            for t, v in enumerate(BatchSampler(SequentialSampler(sample(range(num_movies), num_movies)),
-                                  batch_size=args.batch_size, drop_last=False)):
-                                  #batch_size=num_movies, drop_last=False)):
-                v = torch.from_numpy(np.array(v)).to(device)
-                m = torch.index_select(torch.index_select(rating_train, 1, u), 2, v)
-                if len(torch.nonzero(m)) == 0:
-                    continue
+            m_hat, loss, rmse = model(u, v, r)
+            train_loss += loss.item()
+            train_rmse += rmse.item()
 
-                m_hat, loss, rmse = model(u,v,m,m)
-                train_loss += loss.item()
-                train_rmse += rmse.item()
-
-                model.zero_grad()
-                loss.backward()
-                optimizer.step()
-        print('epoch: '+str(epoch+1)+' loss: '+str(train_loss/((s+1)*(t+1)))
-                                    +' rmse: '+str(train_rmse/((s+1)*(t+1))))
+        model.zero_grad()
+        loss.backward()
+        optimizer.step()
+        print('epoch: '+str(epoch+1)+' loss: '+str(train_loss/(i+1))
+                                    +' rmse: '+str(train_rmse/(i+1)))
 
         if (epoch+1) % args.val_step == 0:
             # Validation
             model.eval()
+
+            val_loss = 0
+            val_rmse = 0
             with torch.no_grad():
-                for s, u in enumerate(BatchSampler(SequentialSampler(range(num_users)),
-                                      batch_size=num_users, drop_last=False)):
-                    u = torch.from_numpy(np.array(u)).to(device)
+                for i, (u, v, r) in enumerate(valid_loader):
+                    u = u.to(device)
+                    v = v.to(device)
+                    r = r.to(device)
 
-                    for t, v in enumerate(BatchSampler(SequentialSampler(range(num_movies)),
-                                          batch_size=num_movies, drop_last=False)):
-                        v = torch.from_numpy(np.array(v)).to(device)
-                        m = torch.index_select(torch.index_select(rating_train, 1, u), 2, v)
-                        r = torch.index_select(torch.index_select(rating_val, 1, u), 2, v)
+                    m_hat, loss, rmse = model(u, v, r)
+                    val_loss += loss.item()
+                    val_rmse += rmse.item()
 
-                        m_hat, loss, rmse = model(u,v,m,r)
-
-            print('[val loss] : '+str(loss.item())
-                +' [val rmse] : '+str(rmse.item()))
-            if best_loss > rmse.item():
-                best_loss = rmse.item()
+            print('[val loss] : '+str(val_loss/(i+1))
+                +' [val rmse] : '+str(val_rmse/(i+1)))
+            if best_loss > val_rmse/(i+1):
+                best_loss = val_rmse/(i+1)
                 best_epoch= epoch+1
                 torch.save(model.state_dict(),
                        os.path.join(args.model_path, 'model-%d.pkl'%(best_epoch)))

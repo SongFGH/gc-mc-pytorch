@@ -11,7 +11,7 @@ from metrics import rmse, softmax_accuracy, softmax_cross_entropy
 
 class GAE(nn.Module):
     def __init__(self, num_users, num_items, num_classes,
-                 u_features, v_features,
+                 u_features, v_features, adj_train,
                  nb, input_dim, hidden, dropout, **kwargs):
         super(GAE, self).__init__()
 
@@ -23,18 +23,18 @@ class GAE(nn.Module):
         self.hidden = hidden
         self.dropout = dropout
 
+        self.adj_matrix = adj_train
         self.u_features = u_features
         self.v_features = v_features
-        self.u_emb = nn.Embedding(num_users, input_dim)
-        self.v_emb = nn.Embedding(num_items, input_dim)
-        #self.u_side = nn.Linear(u_features.size(1), self.hidden[0])
-        #self.v_side = nn.Linear(v_features.size(1), self.hidden[0])
+        self.u_emb = torch.eye(num_users)
+        self.v_emb = torch.eye(num_items)
 
-        #layers = []
-        self.gcl = GraphConvolution(self.input_dim, self.hidden[0],
+        self.gcl = GraphConvolution(self.hidden[0], self.num_users, self.num_items,
                                     self.num_classes, self.dropout, bias=False)
-        self.dense1 = nn.Linear(self.u_features.size(1)+self.v_features.size(1), self.hidden[0], bias=True)
-        self.dense2 = nn.Linear(2 * self.hidden[0], self.hidden[1], bias=False)
+        self.denseu1 = nn.Linear(self.u_features.size(1), self.input_dim, bias=True)
+        self.densev1 = nn.Linear(self.v_features.size(1), self.input_dim, bias=True)
+        self.denseu2 = nn.Linear(self.input_dim + self.hidden[0], self.hidden[1], bias=False)
+        self.densev2 = nn.Linear(self.input_dim + self.hidden[0], self.hidden[1], bias=False)
 
         self.bilin_dec = BilinearMixture(num_classes=self.num_classes,
                                       input_dim=self.hidden[1],
@@ -45,7 +45,6 @@ class GAE(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.u_emb = self.u_emb.to(self.device)
         self.v_emb = self.v_emb.to(self.device)
-        self.gcl = self.gcl.to(self.device)
 
     def gc_encoder(self, u_feat, v_feat, u_side, v_side, m):
         du = torch.abs(torch.sum(torch.sum(m, 1), 0)).float()
@@ -57,27 +56,26 @@ class GAE(nn.Module):
         for r, adj in enumerate(m):
             z += self.gcl(u_feat, v_feat, adj, c, r)
         z = torch.relu(z)
-        h = torch.relu(self.dense1(torch.cat((u_side, v_side), 0)))
-        h = torch.relu(self.dense2(torch.cat((z,h), 1)))
+        u_z, v_z = z[:u_feat.size(0)], z[u_feat.size(0):]
+        u_f = torch.relu(self.denseu1(u_side))
+        v_f = torch.relu(self.densev1(v_side))
+        u_h = torch.relu(self.denseu2(torch.cat((u_z, u_f), 1)))
+        v_h = torch.relu(self.densev2(torch.cat((v_z, v_f), 1)))
 
-        return h
+        return u_h, v_h
 
-    def bl_decoder(self, u, v, m):
+    def forward(self, u, v, r):
 
-        output, m_hat = self.bilin_dec(u, v)
+        u_feat = self.u_emb[u]
+        v_feat = self.v_emb[v]
+        u_side = self.u_features[u]
+        v_side = self.v_features[v]
+        m = torch.index_select(torch.index_select(self.adj_matrix, 1, u), 2, v)
+
+        u_h, v_h = self.gc_encoder(u_feat, v_feat, u_side, v_side, m)
+        output, m_hat = self.bilin_dec(u_h, v_h)
 
         loss = softmax_cross_entropy(output, m)
         rmse_loss = rmse(m_hat, m)
-
-        return m_hat, loss, rmse_loss
-
-    def forward(self, u, v, m, t):
-        u_feat = self.u_emb(u)
-        v_feat = self.v_emb(v)
-        u_side = torch.cat((torch.zeros(u_feat.size(0), self.v_features.size(1)).to(self.device), self.u_features[u]), 1)
-        v_side = torch.cat((self.v_features[v], torch.zeros(v_feat.size(0), self.u_features.size(1)).to(self.device)), 1)
-
-        hidden = self.gc_encoder(u_feat, v_feat, u_side, v_side, m)
-        m_hat, loss, rmse_loss = self.bl_decoder(hidden[:u.size(0)], hidden[u.size(0):], t)
 
         return m_hat, loss, rmse_loss

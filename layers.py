@@ -11,13 +11,13 @@ class GraphConvolution(Module):
     Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
     """
 
-    def __init__(self, input_dim, hidden_dim, num_classes, dropout, bias=True):
+    def __init__(self, hidden_dim, num_users, num_items, num_classes, dropout, bias=True):
         super(GraphConvolution, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.dropout = nn.Dropout(dropout)
-        self.u_weight = Parameter(torch.randn(num_classes, input_dim, hidden_dim)).to(self.device)
-        self.v_weight = Parameter(torch.randn(num_classes, input_dim, hidden_dim)).to(self.device)
+        self.u_weight = Parameter(torch.randn(num_classes, num_users, hidden_dim)).to(self.device)
+        self.v_weight = Parameter(torch.randn(num_classes, num_items, hidden_dim)).to(self.device)
         if bias:
             self.bias = Parameter(torch.randn(hidden_dim)).to(self.device)
         else:
@@ -29,7 +29,7 @@ class GraphConvolution(Module):
                          torch.cat((adj.t(), torch.zeros(adj.size(1), adj.size(1)).to(self.device)), 1)), 0)
         diag = torch.diag(degree)
         adj = torch.spmm(diag, adj)
-        
+
         u = self.dropout(u)
         v = self.dropout(v)
 
@@ -65,12 +65,16 @@ class BilinearMixture(Module):
         u = self.dropout(u)
         v = self.dropout(v)
 
-        outputs = torch.stack([self.a[i][r]*self.weight[i]
-                               for i in range(self.nb) for r in range(self.num_classes)], 0)\
-                  .view(self.num_classes, self.nb, self.input_dim, self.input_dim)
-        outputs = torch.sum(outputs, 1)
+        basis_outputs = []
+        for weight in self.weight:
+            u_w = torch.matmul(u, weight)
+            #x = torch.sum(torch.mul(u_w, v), 1)
+            x = torch.mm(u_w, v.t())
+            basis_outputs.append(x)
 
-        outputs = torch.matmul(torch.matmul(outputs, u.t()).permute(0,2,1), v.t())
+        basis_outputs = torch.stack(basis_outputs, 2)
+        outputs = torch.matmul(basis_outputs, self.a).permute(2,0,1)
+
         m_hat = torch.stack([(r+1)*output for r, output in enumerate(F.softmax(outputs, 0))], 0)
         m_hat = torch.sum(m_hat, 0)
 
