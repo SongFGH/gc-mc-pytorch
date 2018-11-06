@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch.nn.utils.rnn as rnn
 from torchvision import models
 from layers import *
+from utils import *
 from metrics import rmse, softmax_accuracy, softmax_cross_entropy
 
 
@@ -26,20 +27,24 @@ class GAE(nn.Module):
         self.v_features = v_features
         self.u_emb = nn.Embedding(num_users, input_dim)
         self.v_emb = nn.Embedding(num_items, input_dim)
+        #self.u_side = nn.Linear(u_features.size(1), self.hidden[0])
+        #self.v_side = nn.Linear(v_features.size(1), self.hidden[0])
 
         #layers = []
-        self.gcl = GraphConvolution(u_features.size(1), v_features.size(1), self.hidden[0],
-                                    self.num_classes, self.dropout, bias=True)
-        self.dense1 = nn.Linear(self.hidden[0], self.hidden[1], bias=False)
-        self.dense2 = nn.Linear(input_dim, self.hidden[1], bias=False)
+        self.gcl = GraphConvolution(self.input_dim, self.hidden[0],
+                                    self.num_classes, self.dropout, bias=False)
+        self.dense1 = nn.Linear(self.u_features.size(1)+self.v_features.size(1), self.hidden[0], bias=True)
+        self.dense2 = nn.Linear(2 * self.hidden[0], self.hidden[1], bias=False)
 
         self.bilin_dec = BilinearMixture(num_classes=self.num_classes,
                                       input_dim=self.hidden[1],
                                       user_item_bias=False,
-                                      nb=nb)
+                                      nb=nb, dropout=self.dropout)
 
         #self.model = nn.Sequential(*layers)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.u_emb = self.u_emb.to(self.device)
+        self.v_emb = self.v_emb.to(self.device)
         self.gcl = self.gcl.to(self.device)
 
     def gc_encoder(self, u_feat, v_feat, u_side, v_side, m):
@@ -51,11 +56,11 @@ class GAE(nn.Module):
         z = torch.zeros(u_feat.size(0)+v_feat.size(0), self.hidden[0]).to(self.device)
         for r, adj in enumerate(m):
             z += self.gcl(u_feat, v_feat, adj, c, r)
-        z = F.relu(z)
-        hidden = torch.sigmoid(self.dense1(z) +
-                               self.dense2(torch.cat((u_side, v_side), 0)))
+        z = torch.relu(z)
+        h = torch.relu(self.dense1(torch.cat((u_side, v_side), 0)))
+        h = torch.relu(self.dense2(torch.cat((z,h), 1)))
 
-        return hidden
+        return h
 
     def bl_decoder(self, u, v, m):
 
@@ -67,10 +72,10 @@ class GAE(nn.Module):
         return m_hat, loss, rmse_loss
 
     def forward(self, u, v, m, t):
-        u_feat = self.u_features[u]
-        v_feat = self.v_features[v]
-        u_side = F.relu(self.u_emb(u))
-        v_side = F.relu(self.v_emb(v))
+        u_feat = self.u_emb(u)
+        v_feat = self.v_emb(v)
+        u_side = torch.cat((torch.zeros(u_feat.size(0), self.v_features.size(1)).to(self.device), self.u_features[u]), 1)
+        v_side = torch.cat((self.v_features[v], torch.zeros(v_feat.size(0), self.u_features.size(1)).to(self.device)), 1)
 
         hidden = self.gc_encoder(u_feat, v_feat, u_side, v_side, m)
         m_hat, loss, rmse_loss = self.bl_decoder(hidden[:u.size(0)], hidden[u.size(0):], t)

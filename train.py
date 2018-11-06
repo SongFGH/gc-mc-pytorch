@@ -44,7 +44,7 @@ for p in model.parameters():
 print(model)
 print("The number of parameters: {}".format(num_params))
 
-optimizer = optim.Adam(model.parameters(), lr = args.lr, weight_decay = args.weight_decay)
+optimizer = optim.Adam(model.parameters(), lr = args.lr, betas = [0.9, 0.999], weight_decay = args.weight_decay)
 
 best_epoch = 0
 best_loss  = 9999.
@@ -97,9 +97,9 @@ def train():
                                           batch_size=num_movies, drop_last=False)):
                         v = torch.from_numpy(np.array(v)).to(device)
                         m = torch.index_select(torch.index_select(rating_train, 1, u), 2, v)
-                        t = torch.index_select(torch.index_select(rating_val, 1, u), 2, v)
+                        r = torch.index_select(torch.index_select(rating_val, 1, u), 2, v)
 
-                        m_hat, loss, rmse = model(u,v,m,t)
+                        m_hat, loss, rmse = model(u,v,m,r)
 
             print('[val loss] : '+str(loss.item())
                 +' [val rmse] : '+str(rmse.item()))
