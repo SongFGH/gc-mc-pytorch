@@ -11,36 +11,53 @@ class GraphConvolution(Module):
     Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
     """
 
-    def __init__(self, hidden_dim, num_users, num_items, num_classes, dropout, bias=True):
+    def __init__(self, input_dim, hidden_dim, num_users, num_items, num_classes, act, dropout, bias=True):
         super(GraphConvolution, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+        self.act = act
         self.dropout = nn.Dropout(dropout)
-        self.u_weight = Parameter(torch.randn(num_classes, num_users, hidden_dim)).to(self.device)
-        self.v_weight = Parameter(torch.randn(num_classes, num_items, hidden_dim)).to(self.device)
+        self.u_weight = Parameter(torch.randn(num_classes, input_dim, hidden_dim)).to(self.device)
+        self.v_weight = self.u_weight
+        #self.v_weight = Parameter(torch.randn(num_classes, input_dim, hidden_dim)).to(self.device)
         if bias:
-            self.bias = Parameter(torch.randn(hidden_dim)).to(self.device)
+            self.u_bias = Parameter(torch.randn(hidden_dim)).to(self.device)
+            self.v_bias = self.u_bias
+            #self.bias = Parameter(torch.randn(hidden_dim)).to(self.device)
         else:
-            self.bias = None
+            self.u_bias = None
+            self.v_bias = None
 
-    def forward(self, u, v, adj, degree, r):
+    def forward(self, u, v, u_feat, v_feat, support, support_t, r):
 
-        adj = torch.cat((torch.cat((torch.zeros(adj.size(0), adj.size(0)).to(self.device), adj), 1),
-                         torch.cat((adj.t(), torch.zeros(adj.size(1), adj.size(1)).to(self.device)), 1)), 0)
-        diag = torch.diag(degree)
-        adj = torch.spmm(diag, adj)
+        u_feat = self.dropout(u_feat)
+        v_feat = self.dropout(v_feat)
 
-        u = self.dropout(u)
-        v = self.dropout(v)
+        supports_u = []
+        supports_v = []
+        u_weight = 0
+        v_weight = 0
+        for r in range(support.size(1)):
+            u_weight = u_weight + self.u_weight[r]
+            v_weight = v_weight + self.v_weight[r]
 
-        u_weight = torch.sum(torch.stack([self.u_weight[i] for i in range(r+1)], 0), 0)
-        v_weight = torch.sum(torch.stack([self.v_weight[i] for i in range(r+1)], 0), 0)
-        support = torch.cat((torch.mm(u, u_weight), torch.mm(v, v_weight)), 0)
-        output = torch.spmm(adj, support)
-        if self.bias is not None:
-            output += self.bias
+            # multiply feature matrices with weights
+            tmp_u = torch.mm(u_feat, u_weight)
+            tmp_v = torch.mm(v_feat, v_weight)
 
-        return output
+            # then multiply with rating matrices
+            supports_u.append(torch.spmm(support[:,r,v], tmp_v))
+            supports_v.append(torch.spmm(support_t[:,r,u], tmp_u))
+
+        z_u = torch.sum(torch.stack(supports_u, 0), 0)
+        z_v = torch.sum(torch.stack(supports_v, 0), 0)
+        if self.u_bias is not None:
+            z_u = z_u + self.u_bias
+            z_v = z_v + self.v_bias
+
+        u_outputs = self.act(z_u)
+        v_outputs = self.act(z_v)
+        return u_outputs, v_outputs
 
 class BilinearMixture(Module):
     """
@@ -73,9 +90,10 @@ class BilinearMixture(Module):
             basis_outputs.append(x)
 
         basis_outputs = torch.stack(basis_outputs, 2)
-        outputs = torch.matmul(basis_outputs, self.a).permute(2,0,1)
+        outputs = torch.matmul(basis_outputs, self.a)
+        outputs = torch.stack([outputs[i,i,:] for i in range(outputs.size(0))], 0)
 
-        m_hat = torch.stack([(r+1)*output for r, output in enumerate(F.softmax(outputs, 0))], 0)
-        m_hat = torch.sum(m_hat, 0)
+        m_hat = torch.stack([(r+1)*output for r, output in enumerate(F.softmax(outputs, 1))], 0)
+        m_hat = torch.sum(m_hat, 1)
 
         return outputs, m_hat

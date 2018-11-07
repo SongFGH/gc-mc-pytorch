@@ -19,7 +19,7 @@ def softmax_accuracy(preds, target):
     return torch.sum(correct_prediction)/len_omg
 
 
-def rmse(logits, labels):
+def rmse(input, target):
     """
     Computes the mean square error with the predictions
     computed as average predictions. Note that without the average
@@ -30,14 +30,8 @@ def rmse(logits, labels):
     :return: mse
     """
 
-    omg = torch.sum(labels, 0).detach()
-    len_omg = len(torch.nonzero(omg))
-
-    pred_y = logits
-    y = torch.max(labels, 0)[1].float() + 1.
-
-    se = torch.sub(y, pred_y).pow_(2)
-    mse= torch.sum(torch.mul(omg, se))/len_omg
+    se = torch.sub(input, target).pow_(2)
+    mse = torch.mean(se)
     rmse = torch.sqrt(mse)
 
     return rmse
@@ -46,12 +40,6 @@ def rmse(logits, labels):
 def softmax_cross_entropy(input, target):
     """ computes average softmax cross entropy """
 
-    omg = torch.sum(target,0).view(-1).detach()
-    len_omg = len(torch.nonzero(omg))
-    target = torch.max(target, 0)[1].view(-1)
-    input = input.view(input.size(0), -1).t()
-
     loss = F.cross_entropy(input=input, target=target, reduction='none')
-    loss = torch.sum(torch.mul(omg, loss))/len_omg
 
-    return loss
+    return torch.mean(loss)

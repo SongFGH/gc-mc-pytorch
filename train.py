@@ -18,24 +18,20 @@ args = get_args()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Getting the number of users and movies
-num_users  = args.user_cnt
-num_movies = args.item_cnt
-num_classes  = args.class_cnt
-
 emb_dim= args.emb_dim
 hidden = args.hidden
 
-train_loader, u_features, v_features, adj, classes = get_loader('ml_100k', 'train', args.batch_size, shuffle=True, num_workers=2)
-valid_loader, _, _, _, _ = get_loader('ml_100k', 'valid', args.batch_size, shuffle=False, num_workers=2)
-test_loader,  _, _, _, _ = get_loader('ml_100k', 'test', args.batch_size, shuffle=False, num_workers=2)
+train_loader, valid_loader, test_loader,\
+       u_features, v_features,\
+       class_values, num_users, num_items, \
+       num_side_features, num_support = get_loader('ml_100k', args.batch_size, shuffle=True, num_workers=2)
 
 u_features = torch.from_numpy(u_features).to(device)
 v_features = torch.from_numpy(v_features).to(device)
-adj = torch.from_numpy(adj).float().to(device)
 
 # Creating the architecture of the Neural Network
-model = GAE(num_users, num_movies, num_classes,
-            u_features, v_features, adj,
+model = GAE(num_users, num_items, len(class_values),
+            u_features, v_features, num_side_features,
             args.nb, emb_dim, hidden, args.dropout)
 if torch.cuda.is_available():
     model.cuda()
@@ -63,12 +59,16 @@ def train():
 
         train_loss = 0
         train_rmse = 0
-        for i, (u, v, r) in enumerate(train_loader):
+        for i, (u, v, r, support, support_t, u_side, v_side) in enumerate(train_loader):
             u = u.to(device)
             v = v.to(device)
             r = r.to(device)
+            support = support.to(device)
+            support_t=support_t.to(device)
+            u_side = u_side.to(device)
+            v_side = v_side.to(device)
 
-            m_hat, loss, rmse = model(u, v, r)
+            m_hat, loss, rmse = model(u, v, r, support, support_t, u_side, v_side)
             train_loss += loss.item()
             train_rmse += rmse.item()
 
