@@ -70,11 +70,11 @@ def train():
 
             m_hat, loss, rmse = model(u, v, r, support, support_t, u_side, v_side)
             train_loss += loss.item()
-            train_rmse += rmse.item()
+            train_rmse += rmse
 
-        model.zero_grad()
-        loss.backward()
-        optimizer.step()
+            model.zero_grad()
+            loss.backward()
+            optimizer.step()
         print('epoch: '+str(epoch+1)+' loss: '+str(train_loss/(i+1))
                                     +' rmse: '+str(train_rmse/(i+1)))
 
@@ -85,14 +85,18 @@ def train():
             val_loss = 0
             val_rmse = 0
             with torch.no_grad():
-                for i, (u, v, r) in enumerate(valid_loader):
+                for i, (u, v, r, support, support_t, u_side, v_side) in enumerate(valid_loader):
                     u = u.to(device)
                     v = v.to(device)
                     r = r.to(device)
+                    support = support.to(device)
+                    support_t=support_t.to(device)
+                    u_side = u_side.to(device)
+                    v_side = v_side.to(device)
 
-                    m_hat, loss, rmse = model(u, v, r)
+                    m_hat, loss, rmse = model(u, v, r, support, support_t, u_side, v_side)
                     val_loss += loss.item()
-                    val_rmse += rmse.item()
+                    val_rmse += rmse
 
             print('[val loss] : '+str(val_loss/(i+1))
                 +' [val rmse] : '+str(val_rmse/(i+1)))

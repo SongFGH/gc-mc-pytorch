@@ -28,7 +28,7 @@ class GraphConvolution(Module):
             self.u_bias = None
             self.v_bias = None
 
-    def forward(self, u, v, u_feat, v_feat, support, support_t, r):
+    def forward(self, u_feat, v_feat, support, support_t):
 
         u_feat = self.dropout(u_feat)
         v_feat = self.dropout(v_feat)
@@ -46,8 +46,8 @@ class GraphConvolution(Module):
             tmp_v = torch.mm(v_feat, v_weight)
 
             # then multiply with rating matrices
-            supports_u.append(torch.spmm(support[:,r,v], tmp_v))
-            supports_v.append(torch.spmm(support_t[:,r,u], tmp_u))
+            supports_u.append(torch.spmm(support[:,r,:], tmp_v))
+            supports_v.append(torch.spmm(support_t[:,r,:], tmp_u))
 
         z_u = torch.sum(torch.stack(supports_u, 0), 0)
         z_v = torch.sum(torch.stack(supports_v, 0), 0)
@@ -65,7 +65,7 @@ class BilinearMixture(Module):
     To use in combination with bipartite layers.
     """
 
-    def __init__(self, num_classes, input_dim, user_item_bias=False,
+    def __init__(self, num_users, num_items, num_classes, input_dim, user_item_bias=False,
                  nb = 2, dropout=0.7, **kwargs):
         super(BilinearMixture, self).__init__(**kwargs)
 
@@ -77,23 +77,26 @@ class BilinearMixture(Module):
         self.weight = Parameter(torch.randn(nb, input_dim, input_dim))
         self.a = Parameter(torch.randn(nb, num_classes))
 
-    def forward(self, u, v):
+        self.u_bias = Parameter(torch.randn(num_users, num_classes))
+        self.v_bias = Parameter(torch.randn(num_items, num_classes))
 
-        u = self.dropout(u)
-        v = self.dropout(v)
+    def forward(self, u_hidden, v_hidden, u_indices, v_indices):
+
+        u_hidden = self.dropout(u_hidden)
+        v_hidden = self.dropout(v_hidden)
 
         basis_outputs = []
         for weight in self.weight:
-            u_w = torch.matmul(u, weight)
-            #x = torch.sum(torch.mul(u_w, v), 1)
-            x = torch.mm(u_w, v.t())
+            u_w = torch.matmul(u_hidden, weight)
+            x = torch.sum(torch.mul(u_w, v_hidden), 1)
             basis_outputs.append(x)
 
-        basis_outputs = torch.stack(basis_outputs, 2)
+        basis_outputs = torch.stack(basis_outputs, 1)
         outputs = torch.matmul(basis_outputs, self.a)
-        outputs = torch.stack([outputs[i,i,:] for i in range(outputs.size(0))], 0)
+        outputs = outputs + self.u_bias[u_indices] + self.v_bias[v_indices]
 
-        m_hat = torch.stack([(r+1)*output for r, output in enumerate(F.softmax(outputs, 1))], 0)
+        softmax_out = F.softmax(outputs, 1)
+        m_hat = torch.stack([(r+1)*output for r, output in enumerate(softmax_out.t())], 1)
         m_hat = torch.sum(m_hat, 1)
 
         return outputs, m_hat

@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from sklearn.metrics import mean_squared_error
+from math import sqrt
 
 def softmax_accuracy(preds, target):
     """
@@ -30,16 +31,14 @@ def rmse(input, target):
     :return: mse
     """
 
-    se = torch.sub(input, target).pow_(2)
-    mse = torch.mean(se)
-    rmse = torch.sqrt(mse)
+    rms = sqrt(mean_squared_error(input.data.cpu(), target.data.cpu()))
 
-    return rmse
+    return rms
 
 
 def softmax_cross_entropy(input, target):
     """ computes average softmax cross entropy """
 
-    loss = F.cross_entropy(input=input, target=target, reduction='none')
+    loss = F.cross_entropy(input, target)
 
-    return torch.mean(loss)
+    return loss

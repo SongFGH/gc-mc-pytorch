@@ -68,8 +68,8 @@ def get_loader(data_type, batch_size, shuffle=True, num_workers=2):
 	num_side_features = u_features_side.shape[1]
 
 	# node id's for node input features
-	id_csr_v = sp.identity(num_items, format='csr')
 	id_csr_u = sp.identity(num_users, format='csr')
+	id_csr_v = sp.identity(num_items, format='csr')
 
 	u_features, v_features = preprocess_user_item_features(id_csr_u, id_csr_v)
 
@@ -92,6 +92,7 @@ def get_loader(data_type, batch_size, shuffle=True, num_workers=2):
 	support = sp.hstack(support, format='csr')
 	support_t = sp.hstack(support_t, format='csr')
 
+	'''
 	# Collect all user and item nodes for test set
 	test_u = list(set(test_u_indices))
 	test_v = list(set(test_v_indices))
@@ -103,6 +104,10 @@ def get_loader(data_type, batch_size, shuffle=True, num_workers=2):
 
 	test_support = support[np.array(test_u)]
 	test_support_t = support_t[np.array(test_v)]
+
+	# features as side info
+	test_u_features_side = u_features_side[np.array(test_u)]
+	test_v_features_side = v_features_side[np.array(test_v)]
 
 	# Collect all user and item nodes for validation set
 	val_u = list(set(val_u_indices))
@@ -116,6 +121,9 @@ def get_loader(data_type, batch_size, shuffle=True, num_workers=2):
 	val_support = support[np.array(val_u)]
 	val_support_t = support_t[np.array(val_v)]
 
+	val_u_features_side = u_features_side[np.array(val_u)]
+	val_v_features_side = v_features_side[np.array(val_v)]
+
 	# Collect all user and item nodes for train set
 	train_u = list(set(train_u_indices))
 	train_v = list(set(train_v_indices))
@@ -128,40 +136,38 @@ def get_loader(data_type, batch_size, shuffle=True, num_workers=2):
 	train_support = support[np.array(train_u)]
 	train_support_t = support_t[np.array(train_v)]
 
-	# features as side info
-	test_u_features_side = u_features_side[np.array(test_u)]
-	test_v_features_side = v_features_side[np.array(test_v)]
-
-	val_u_features_side = u_features_side[np.array(val_u)]
-	val_v_features_side = v_features_side[np.array(val_v)]
-
 	train_u_features_side = u_features_side[np.array(train_u)]
 	train_v_features_side = v_features_side[np.array(train_v)]
 
-	test_support = np.array(test_support.toarray())
-	test_support_t = np.array(test_support_t.todense())
 
-	val_support = np.array(val_support.todense())
-	val_support_t = np.array(val_support_t.todense())
+	test_support = test_support.toarray()
+	test_support_t = test_support_t.toarray()
 
-	train_support = np.array(train_support.todense())
-	train_support_t = np.array(train_support_t.todense())
+	val_support = val_support.toarray()
+	val_support_t = val_support_t.toarray()
 
-	u_features = np.array(u_features.todense())
-	v_features = np.array(v_features.todense())
+	train_support = train_support.toarray()
+	train_support_t = train_support_t.toarray()
+	'''
+
+	support = support.toarray()
+	support_t=support_t.toarray()
+	
+	u_features = u_features.toarray()
+	v_features = v_features.toarray()
 
 	num_features = u_features.shape[1]
 
 
-	train_dataset = DataFolder(train_support, train_support_t,
+	train_dataset = DataFolder(support, support_t,
 							   train_u_indices, train_v_indices, train_labels,
-							   train_u_features_side, train_v_features_side, len(class_values))
-	valid_dataset = DataFolder(val_support, val_support_t,
+							   u_features_side, v_features_side, len(class_values))
+	valid_dataset = DataFolder(support, support_t,
 							   val_u_indices, val_v_indices, val_labels,
-							   val_u_features_side, val_v_features_side, len(class_values))
-	test_dataset = DataFolder(test_support, test_support_t,
+							   u_features_side, v_features_side, len(class_values))
+	test_dataset = DataFolder(support, support_t,
 							  test_u_indices, test_v_indices, test_labels,
-							  test_u_features_side, test_v_features_side, len(class_values))
+							  u_features_side, v_features_side, len(class_values))
 
 	train_loader = data.DataLoader(dataset=train_dataset,
 		 						   batch_size=batch_size,
