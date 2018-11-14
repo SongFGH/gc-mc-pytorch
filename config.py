@@ -19,8 +19,8 @@ def get_args():
     parser.add_argument('--weight_decay', type=float, default=0.005)
     parser.add_argument('--dropout', type=float, default=0.7)
 
-    parser.add_argument('--emb-dim', type=int, default=10)
-    parser.add_argument('--hidden', default=[500,75])
+    parser.add_argument('--emb-dim', type=int, default=64)
+    parser.add_argument('--hidden', default=[128,64])
     parser.add_argument('--nb', type=int, default=2)
 
     parser.add_argument('--user-cnt', type=int, default=943)#6040)

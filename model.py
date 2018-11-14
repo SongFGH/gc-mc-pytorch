@@ -15,37 +15,24 @@ class GAE(nn.Module):
                  nb, input_dim, hidden, dropout, **kwargs):
         super(GAE, self).__init__()
 
-        self.num_users = num_users
-        self.num_items = num_items
-        self.num_classes = num_classes
-
-        self.input_dim = input_dim
-        self.hidden = hidden
         self.dropout = dropout
 
         self.u_features = u_features.float()
         self.v_features = v_features.float()
-        self.u_emb = torch.eye(num_users)
-        self.v_emb = torch.eye(num_items)
 
-        self.gcl = GraphConvolution(self.u_features.size(1), self.hidden[0],
-                                    self.num_users, self.num_items,
-                                    self.num_classes, torch.relu, self.dropout, bias=False)
-        self.denseu1 = nn.Linear(num_side_features, self.input_dim, bias=True)
-        self.densev1 = nn.Linear(num_side_features, self.input_dim, bias=True)
-        self.denseu2 = nn.Linear(self.input_dim + self.hidden[0], self.hidden[1], bias=False)
-        self.densev2 = nn.Linear(self.input_dim + self.hidden[0], self.hidden[1], bias=False)
+        self.gcl = GraphConvolution(self.u_features.size(1), hidden[0],
+                                    num_users, num_items,
+                                    num_classes, torch.relu, self.dropout, bias=True)
+        self.denseu1 = nn.Linear(num_side_features, input_dim, bias=True)
+        self.densev1 = nn.Linear(num_side_features, input_dim, bias=True)
+        self.denseu2 = nn.Linear(input_dim + hidden[0], hidden[1], bias=False)
+        self.densev2 = nn.Linear(input_dim + hidden[0], hidden[1], bias=False)
 
-        self.bilin_dec = BilinearMixture(num_users=self.num_users, num_items=self.num_items,
-                                         num_classes=self.num_classes,
-                                         input_dim=self.hidden[1],
+        self.bilin_dec = BilinearMixture(num_users=num_users, num_items=num_items,
+                                         num_classes=num_classes,
+                                         input_dim=hidden[1],
                                          user_item_bias=False,
                                          nb=nb, dropout=self.dropout)
-
-        #self.model = nn.Sequential(*layers)
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.u_emb = self.u_emb.to(self.device)
-        self.v_emb = self.v_emb.to(self.device)
 
     def forward(self, u, v, r, support, support_t, u_side, v_side):
 
@@ -60,6 +47,6 @@ class GAE(nn.Module):
         output, m_hat = self.bilin_dec(u_h, v_h, u, v)
 
         loss = softmax_cross_entropy(output, r.long())
-        rmse_loss = rmse(m_hat, r.float()+1.)
+        rmse_loss = rmse(m_hat, r+1.)
 
         return m_hat, loss, rmse_loss

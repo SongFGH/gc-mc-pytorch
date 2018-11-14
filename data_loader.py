@@ -92,67 +92,9 @@ def get_loader(data_type, batch_size, shuffle=True, num_workers=2):
 	support = sp.hstack(support, format='csr')
 	support_t = sp.hstack(support_t, format='csr')
 
-	'''
-	# Collect all user and item nodes for test set
-	test_u = list(set(test_u_indices))
-	test_v = list(set(test_v_indices))
-	test_u_dict = {n: i for i, n in enumerate(test_u)}
-	test_v_dict = {n: i for i, n in enumerate(test_v)}
-
-	test_u_indices = np.array([test_u_dict[o] for o in test_u_indices])
-	test_v_indices = np.array([test_v_dict[o] for o in test_v_indices])
-
-	test_support = support[np.array(test_u)]
-	test_support_t = support_t[np.array(test_v)]
-
-	# features as side info
-	test_u_features_side = u_features_side[np.array(test_u)]
-	test_v_features_side = v_features_side[np.array(test_v)]
-
-	# Collect all user and item nodes for validation set
-	val_u = list(set(val_u_indices))
-	val_v = list(set(val_v_indices))
-	val_u_dict = {n: i for i, n in enumerate(val_u)}
-	val_v_dict = {n: i for i, n in enumerate(val_v)}
-
-	val_u_indices = np.array([val_u_dict[o] for o in val_u_indices])
-	val_v_indices = np.array([val_v_dict[o] for o in val_v_indices])
-
-	val_support = support[np.array(val_u)]
-	val_support_t = support_t[np.array(val_v)]
-
-	val_u_features_side = u_features_side[np.array(val_u)]
-	val_v_features_side = v_features_side[np.array(val_v)]
-
-	# Collect all user and item nodes for train set
-	train_u = list(set(train_u_indices))
-	train_v = list(set(train_v_indices))
-	train_u_dict = {n: i for i, n in enumerate(train_u)}
-	train_v_dict = {n: i for i, n in enumerate(train_v)}
-
-	train_u_indices = np.array([train_u_dict[o] for o in train_u_indices])
-	train_v_indices = np.array([train_v_dict[o] for o in train_v_indices])
-
-	train_support = support[np.array(train_u)]
-	train_support_t = support_t[np.array(train_v)]
-
-	train_u_features_side = u_features_side[np.array(train_u)]
-	train_v_features_side = v_features_side[np.array(train_v)]
-
-
-	test_support = test_support.toarray()
-	test_support_t = test_support_t.toarray()
-
-	val_support = val_support.toarray()
-	val_support_t = val_support_t.toarray()
-
-	train_support = train_support.toarray()
-	train_support_t = train_support_t.toarray()
-	'''
-
 	support = support.toarray()
 	support_t=support_t.toarray()
-	
+
 	u_features = u_features.toarray()
 	v_features = v_features.toarray()
 
