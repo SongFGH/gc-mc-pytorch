@@ -21,7 +21,7 @@ class GraphConvolution(Module):
         self.v_weight = self.u_weight
         if bias:
             self.u_bias = Parameter(torch.randn(hidden_dim))
-            #self.bias = Parameter(torch.randn(hidden_dim))
+            #self.v_bias = Parameter(torch.randn(hidden_dim))
             self.v_bias = self.u_bias
         else:
             self.u_bias = None
@@ -30,7 +30,16 @@ class GraphConvolution(Module):
         for w in [self.u_weight, self.v_weight]:
             nn.init.xavier_normal_(w)
 
-    def forward(self, u_feat, v_feat, support, support_t):
+    def normalize(self, mx):
+        """Row-normalize sparse matrix"""
+        rowsum = torch.sum(mx, 0)
+        r_inv = torch.pow(rowsum, -1)
+        r_inv[torch.isinf(r_inv)] = 0.
+        r_mat_inv = torch.diag(r_inv)
+        mx = torch.matmul(mx, r_mat_inv)
+        return mx
+
+    def forward(self, u_feat, v_feat, u, v, support):
 
         u_feat = self.dropout(u_feat)
         v_feat = self.dropout(v_feat)
@@ -39,7 +48,7 @@ class GraphConvolution(Module):
         supports_v = []
         u_weight = 0
         v_weight = 0
-        for r in range(support.size(1)):
+        for r in range(support.size(0)):
             u_weight = u_weight + self.u_weight[r]
             v_weight = v_weight + self.v_weight[r]
 
@@ -47,9 +56,10 @@ class GraphConvolution(Module):
             tmp_u = torch.mm(u_feat, u_weight)
             tmp_v = torch.mm(v_feat, v_weight)
 
+            support_norm = self.normalize(support[r])
             # then multiply with rating matrices
-            supports_u.append(torch.mm(support[:,r,:], tmp_v))
-            supports_v.append(torch.mm(support_t[:,r,:], tmp_u))
+            supports_u.append(torch.mm(support_norm[u], tmp_v))
+            supports_v.append(torch.mm(support_norm.t()[v], tmp_u))
 
         z_u = torch.sum(torch.stack(supports_u, 0), 0)
         z_v = torch.sum(torch.stack(supports_v, 0), 0)
@@ -66,7 +76,6 @@ class BilinearMixture(Module):
     Decoder model layer for link-prediction with ratings
     To use in combination with bipartite layers.
     """
-
     def __init__(self, num_users, num_items, num_classes, input_dim, user_item_bias=False,
                  nb = 2, dropout=0.7, **kwargs):
         super(BilinearMixture, self).__init__(**kwargs)
@@ -81,7 +90,7 @@ class BilinearMixture(Module):
         for w in [self.weight, self.a, self.u_bias, self.v_bias]:
             nn.init.xavier_normal_(w)
 
-    def forward(self, u_hidden, v_hidden, u_indices, v_indices):
+    def forward(self, u_hidden, v_hidden, u, v):
 
         u_hidden = self.dropout(u_hidden)
         v_hidden = self.dropout(v_hidden)
@@ -94,12 +103,12 @@ class BilinearMixture(Module):
 
         basis_outputs = torch.stack(basis_outputs, 2)
         outputs = torch.matmul(basis_outputs, self.a)
-        outputs = outputs + self.u_bias[u_indices].unsqueeze(1).repeat(1,outputs.size(1),1) \
-                          + self.v_bias[v_indices].unsqueeze(0).repeat(outputs.size(0),1,1)
+        outputs = outputs + self.u_bias[u].unsqueeze(1).repeat(1,outputs.size(1),1) \
+                          + self.v_bias[v].unsqueeze(0).repeat(outputs.size(0),1,1)
         outputs = outputs.permute(2,0,1)
 
         softmax_out = F.softmax(outputs, 0)
-        m_hat = torch.stack([(r+1.)*output for r, output in enumerate(softmax_out)], 0)
+        m_hat = torch.stack([(r+1)*output for r, output in enumerate(softmax_out)], 0)
         m_hat = torch.sum(m_hat, 0)
 
         return outputs, m_hat

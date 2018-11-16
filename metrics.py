@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import mean_squared_error
-from math import sqrt
+
 
 def softmax_accuracy(preds, target):
     """
@@ -20,7 +19,7 @@ def softmax_accuracy(preds, target):
     return torch.sum(correct_prediction)/len_omg
 
 
-def rmse(input, target):
+def rmse(logits, labels):
     """
     Computes the mean square error with the predictions
     computed as average predictions. Note that without the average
@@ -31,14 +30,30 @@ def rmse(input, target):
     :return: mse
     """
 
-    rms = sqrt(mean_squared_error(input.data.cpu(), target.data.cpu()))
+    omg = torch.sum(labels, 0).detach()
+    len_omg = len(torch.nonzero(omg))
 
-    return rms
+    pred_y = logits
+    y = torch.max(labels, 0)[1].float() + 1.
+
+    se = torch.sub(y, pred_y).pow_(2)
+    mse= torch.sum(torch.mul(omg, se))/len_omg
+    rmse = torch.sqrt(mse)
+
+    return rmse
 
 
 def softmax_cross_entropy(input, target):
     """ computes average softmax cross entropy """
 
-    loss = F.cross_entropy(input, target)
+    input = input.view(input.size(0),-1).t()
+    target = target.view(target.size(0),-1).t()
+
+    omg = torch.sum(target,1).detach()
+    len_omg = len(torch.nonzero(omg))
+    target = torch.max(target, 1)[1]
+
+    loss = F.cross_entropy(input=input, target=target, reduction='none')
+    loss = torch.sum(torch.mul(omg, loss))/len_omg
 
     return loss
