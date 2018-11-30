@@ -65,11 +65,13 @@ def train():
         train_loss = 0.
         train_rmse = 0.
         for s, u in enumerate(BatchSampler(SequentialSampler(sample(range(num_users), num_users)),
-                              batch_size=args.batch_size, drop_last=False)):
+                              batch_size=num_users, drop_last=False)):
+                              #batch_size=args.batch_size, drop_last=False)):
             u = torch.from_numpy(np.array(u)).to(device)
 
             for t, v in enumerate(BatchSampler(SequentialSampler(sample(range(num_items), num_items)),
-                                  batch_size=args.batch_size, drop_last=False)):
+                                  batch_size=num_items, drop_last=False)):
+                                  #batch_size=args.batch_size, drop_last=False)):
                 v = torch.from_numpy(np.array(v)).to(device)
                 if len(torch.nonzero(torch.index_select(torch.index_select(rating_train, 1, u), 2, v))) == 0:
                     continue

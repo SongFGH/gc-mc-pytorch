@@ -33,10 +33,16 @@ class GraphConvolution(Module):
     def normalize(self, mx):
         """Row-normalize sparse matrix"""
         rowsum = torch.sum(mx, 0)
-        r_inv = torch.pow(rowsum, -1)
+        r_inv = torch.pow(rowsum, -0.5)
         r_inv[torch.isinf(r_inv)] = 0.
         r_mat_inv = torch.diag(r_inv)
+        colsum = torch.sum(mx, 1)
+        c_inv = torch.pow(colsum, -0.5)
+        c_inv[torch.isinf(c_inv)] = 0.
+        c_mat_inv = torch.diag(c_inv)
+
         mx = torch.matmul(mx, r_mat_inv)
+        mx = torch.matmul(c_mat_inv, mx)
         return mx
 
     def forward(self, u_feat, v_feat, u, v, support):
@@ -57,9 +63,10 @@ class GraphConvolution(Module):
             tmp_v = torch.mm(v_feat, v_weight)
 
             support_norm = self.normalize(support[r])
+            support_norm_t = self.normalize(support[r].t())
             # then multiply with rating matrices
             supports_u.append(torch.mm(support_norm[u], tmp_v))
-            supports_v.append(torch.mm(support_norm.t()[v], tmp_u))
+            supports_v.append(torch.mm(support_norm_t[v], tmp_u))
 
         z_u = torch.sum(torch.stack(supports_u, 0), 0)
         z_v = torch.sum(torch.stack(supports_v, 0), 0)
@@ -76,7 +83,7 @@ class BilinearMixture(Module):
     Decoder model layer for link-prediction with ratings
     To use in combination with bipartite layers.
     """
-    def __init__(self, num_users, num_items, num_classes, input_dim, user_item_bias=False,
+    def __init__(self, num_users, num_items, num_classes, input_dim,
                  nb = 2, dropout=0.7, **kwargs):
         super(BilinearMixture, self).__init__(**kwargs)
 

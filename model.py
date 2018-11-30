@@ -37,8 +37,7 @@ class GAE(nn.Module):
         self.bilin_dec = BilinearMixture(num_users=num_users, num_items=num_items,
                                          num_classes=num_classes,
                                          input_dim=hidden[2],
-                                         user_item_bias=False,
-                                         nb=nb, dropout=self.dropout)
+                                         nb=nb, dropout=0.)
 
     def forward(self, u, v, r_matrix):
 
@@ -46,8 +45,8 @@ class GAE(nn.Module):
                              range(self.num_users), range(self.num_items), r_matrix)
         u_z, v_z = self.gcl2(u_z, v_z, u, v, r_matrix)
 
-        u_f = torch.relu(self.denseu1(F.dropout(self.u_features_side[u], self.dropout)))
-        v_f = torch.relu(self.densev1(F.dropout(self.v_features_side[v], self.dropout)))
+        u_f = torch.relu(self.denseu1(self.u_features_side[u]))
+        v_f = torch.relu(self.densev1(self.v_features_side[v]))
 
         u_h = self.denseu2(F.dropout(torch.cat((u_z, u_f), 1), self.dropout))
         v_h = self.densev2(F.dropout(torch.cat((v_z, v_f), 1), self.dropout))
